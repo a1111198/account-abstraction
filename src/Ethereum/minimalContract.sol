@@ -14,6 +14,8 @@ contract MinimalAccount is IAccount, Ownable {
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
     error MinimalAccount__NotFromEntryPoint();
+    error MinimalAccount__NotFromEntryPointOrOwner();
+    error MiniamlAccount__CallFailed(bytes);
     /*//////////////////////////////////////////////////////////////
                             STATE VARIABLES
     //////////////////////////////////////////////////////////////*/
@@ -30,20 +32,38 @@ contract MinimalAccount is IAccount, Ownable {
         _;
     }
 
+    modifier requireFromEntryPointOrOwner() {
+        if (msg.sender != address(i_entryPoint) && msg.sender != owner()) {
+            revert MinimalAccount__NotFromEntryPointOrOwner();
+        }
+        _;
+    }
+
     /*//////////////////////////////////////////////////////////////
                                FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     constructor(address entryPoint) Ownable(msg.sender) {
         i_entryPoint = IEntryPoint(entryPoint);
-    } /*//////////////////////////////////////////////////////////////
-                           EXTERNAL FUNCTIONS
-        //////////////////////////////////////////////////////////////*/
+    }
 
-    function validateUserOp(
-        PackedUserOperation calldata userOp,
-        bytes32 userOpHash,
-        uint256 missingAccountFunds
-    ) external requireFromEntryPoint returns (uint256 validationData) {
+    receive() external payable {}
+
+    /*//////////////////////////////////////////////////////////////
+                           EXTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function execute(address dest, uint256 value, bytes calldata functionData) external requireFromEntryPointOrOwner {
+        (bool success, bytes memory result) = payable(dest).call{value: value}(functionData);
+        if (!success) {
+            revert MiniamlAccount__CallFailed(result);
+        }
+    }
+
+    function validateUserOp(PackedUserOperation calldata userOp, bytes32 userOpHash, uint256 missingAccountFunds)
+        external
+        requireFromEntryPoint
+        returns (uint256 validationData)
+    {
         validationData = _validateSignature(userOp, userOpHash);
         _payPreFund(missingAccountFunds);
     }
@@ -52,17 +72,13 @@ contract MinimalAccount is IAccount, Ownable {
                            INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
-    function _validateSignature(
-        PackedUserOperation calldata userOp,
-        bytes32 userOpHash
-    ) internal view returns (uint256 validationData) {
-        bytes32 ethSignedMessgeHash = MessageHashUtils.toEthSignedMessageHash(
-            userOpHash
-        );
-        (address signer, , ) = ECDSA.tryRecover(
-            ethSignedMessgeHash,
-            userOp.signature
-        );
+    function _validateSignature(PackedUserOperation calldata userOp, bytes32 userOpHash)
+        internal
+        view
+        returns (uint256 validationData)
+    {
+        bytes32 ethSignedMessgeHash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
+        (address signer,,) = ECDSA.tryRecover(ethSignedMessgeHash, userOp.signature);
         if (signer == owner()) {
             return SIG_VALIDATION_FAILED;
         }
@@ -70,10 +86,7 @@ contract MinimalAccount is IAccount, Ownable {
     }
 
     function _payPreFund(uint256 missingAccountFunds) private {
-        (bool success, ) = payable(msg.sender).call{
-            value: missingAccountFunds,
-            gas: type(uint256).max
-        }("");
+        (bool success,) = payable(msg.sender).call{value: missingAccountFunds, gas: type(uint256).max}("");
         (success);
     }
 
