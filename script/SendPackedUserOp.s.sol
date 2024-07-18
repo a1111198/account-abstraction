@@ -15,8 +15,7 @@ contract SendPackedUserOp is Script {
     using MessageHashUtils for bytes32;
 
     // Make sure you trust this user - don't run this on Mainnet!
-    address constant RANDOM_APPROVER =
-        0x9EA9b0cc1919def1A3CfAEF4F7A66eE3c36F86fC;
+    address constant RANDOM_APPROVER = 0x9EA9b0cc1919def1A3CfAEF4F7A66eE3c36F86fC;
 
     function run() public {
         // Setup
@@ -24,18 +23,14 @@ contract SendPackedUserOp is Script {
 
     function generateSignedUserOperation(
         bytes memory callData,
-        HelperConfig.NetworkConfig memory config
+        HelperConfig.NetworkConfig memory config,
+        address minimalAccount
     ) public view returns (PackedUserOperation memory) {
         // 1. Generate the unsigned data
-        uint256 nonce = vm.getNonce(config.account) - 1;
-        PackedUserOperation memory userOp = _generateUnsignedUserOperation(
-            callData,
-            config.account,
-            nonce
-        );
+        uint256 nonce = vm.getNonce(minimalAccount) - 1;
+        PackedUserOperation memory userOp = _generateUnsignedUserOperation(callData, minimalAccount, nonce);
         //2. get Hash of it.
-        bytes32 userOpHashUnsigned = IEntryPoint(config.entryPoint)
-            .getUserOpHash(userOp);
+        bytes32 userOpHashUnsigned = IEntryPoint(config.entryPoint).getUserOpHash(userOp);
         bytes32 digest = userOpHashUnsigned.toEthSignedMessageHash();
         //3.
         uint8 v;
@@ -52,30 +47,25 @@ contract SendPackedUserOp is Script {
         return userOp;
     }
 
-    function _generateUnsignedUserOperation(
-        bytes memory callData,
-        address sender,
-        uint256 nonce
-    ) internal pure returns (PackedUserOperation memory) {
+    function _generateUnsignedUserOperation(bytes memory callData, address sender, uint256 nonce)
+        internal
+        pure
+        returns (PackedUserOperation memory)
+    {
         uint128 verificationGasLimit = 16777216;
         uint128 callGasLimit = verificationGasLimit;
         uint128 maxPriorityFeePerGas = 256;
         uint128 maxFeePerGas = maxPriorityFeePerGas;
-        return
-            PackedUserOperation({
-                sender: sender,
-                nonce: nonce,
-                initCode: hex"",
-                callData: callData,
-                accountGasLimits: bytes32(
-                    (uint256(verificationGasLimit) << 128) | callGasLimit
-                ),
-                preVerificationGas: verificationGasLimit,
-                gasFees: bytes32(
-                    (uint256(maxPriorityFeePerGas) << 128) | maxFeePerGas
-                ),
-                paymasterAndData: hex"",
-                signature: hex""
-            });
+        return PackedUserOperation({
+            sender: sender,
+            nonce: nonce,
+            initCode: hex"",
+            callData: callData,
+            accountGasLimits: bytes32((uint256(verificationGasLimit) << 128) | callGasLimit),
+            preVerificationGas: verificationGasLimit,
+            gasFees: bytes32((uint256(maxPriorityFeePerGas) << 128) | maxFeePerGas),
+            paymasterAndData: hex"",
+            signature: hex""
+        });
     }
 }

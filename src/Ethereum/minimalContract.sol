@@ -80,9 +80,9 @@ contract MinimalAccount is IAccount, Ownable {
         bytes32 ethSignedMessgeHash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
         (address signer,,) = ECDSA.tryRecover(ethSignedMessgeHash, userOp.signature);
         if (signer == owner()) {
-            return SIG_VALIDATION_FAILED;
+            return SIG_VALIDATION_SUCCESS;
         }
-        return SIG_VALIDATION_SUCCESS;
+        return SIG_VALIDATION_FAILED;
     }
 
     function _payPreFund(uint256 missingAccountFunds) private {
